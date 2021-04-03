@@ -107,8 +107,11 @@ def run_kmeans(x, output=None, caption=''):
     plot_data(**plot_config)
     result = KMeans(n_clusters=best_n_clusters, init='random', n_init=10, max_iter=100, tol=1e-04, random_state=RANDOM_SEED)
     result.fit(x)
-    tsne_output = f'{output}/kmeans-tsne-{caption}' if output is not None else None
+    tsne_output = f'{output}/{caption}-kmeans-tsne' if output is not None else None
     plot_tsne(x, result.labels_, best_n_clusters, title=f"{caption}-TSNE Cluster Visualization K Means with {best_n_clusters} clusters", output=tsne_output)
+    x_results = x.copy()
+    x_results['label'] = result.labels_
+    x_results.to_csv(f'{output}/{caption}-kmeans.csv', index=False)
 
 def run_gm(x, output=None, caption=''):
     bic_results, dims, n_comp = search_components_gm(x)
@@ -126,7 +129,9 @@ def run_gm(x, output=None, caption=''):
     labels = result.predict(x)
     tsne_output = f'{output}/{caption}-em-tsne' if output is not None else None
     plot_tsne(x, labels, n_comp, title=f"{caption}-TSNE Cluster Visualization EM  with {n_comp} components", output=tsne_output)
-
+    x_results = x.copy()
+    x_results['label'] = labels
+    x_results.to_csv(f'{output}/{caption}-kmeans.csv', index=False)
 
 def run_pca(x, output=None, caption=''):
     pca = PCA(random_state=RANDOM_SEED)
@@ -146,7 +151,7 @@ def run_pca(x, output=None, caption=''):
     x_pca = pca.fit_transform(x)
     num_components = pca.n_components_
     x_pca = pd.DataFrame(x_pca)
-    x_pca.to_csv(f'{output}/{caption}-pca.csv')
+    x_pca.to_csv(f'{output}/{caption}-pca.csv', index=False)
     print(f'PCA reduction: from {x.shape[1]} to {num_components}')
     return x_pca, num_components
 
@@ -170,7 +175,7 @@ def run_ica(x, output=None, caption=''):
     ica = FastICA(n_components=n, random_state=RANDOM_SEED)
     x_ica = ica.fit_transform(x)
     x_ica = pd.DataFrame(x_ica)
-    x_ica.to_csv(f'{output}/{caption}-ica.csv')
+    x_ica.to_csv(f'{output}/{caption}-ica.csv', index=False)
     print(f'ICA reduction: from {x.shape[1]} to {n}')
     return x_ica, n
 
@@ -199,7 +204,7 @@ def run_rp(x, threshold=0.35, output=None, caption=''):
     transformer = GaussianRandomProjection(random_state=RANDOM_SEED, n_components=n)
     x_rp = transformer.fit_transform(x)
     x_rp = pd.DataFrame(x_rp)
-    x_rp.to_csv(f'{output}/{caption}-rp.csv')
+    x_rp.to_csv(f'{output}/{caption}-rp.csv', index=False)
     print(f'RP reduction: from {x.shape[1]} to {n}')
     return loss_results, x_rp, n
 
