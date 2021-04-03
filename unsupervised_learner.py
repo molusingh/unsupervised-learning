@@ -35,10 +35,10 @@ def process_data(x, y, ts=0.2):
 
     return x_train, x_test, y_train, y_test
 
-def searchk_kmeans(x, clusters_range=range(1,12)):
+def searchk_kmeans(x, num_clusters=range(1,12)):
     inertias = []
     silhouettes = []
-    for i in clusters_range:
+    for i in num_clusters:
         result = KMeans(n_clusters=i, init='random', n_init=10, max_iter=100, tol=1e-04, random_state=RANDOM_SEED)
         result.fit(x)
         if result.n_iter_ >= result.max_iter:
@@ -48,17 +48,17 @@ def searchk_kmeans(x, clusters_range=range(1,12)):
             silhouettes.append(silhouette_score(x, result.labels_))
         else:
             silhouettes.append(float('-inf'))
-    best_n_clusters = clusters_range[np.array(silhouettes).argmax()]
-    return inertias, clusters_range, best_n_clusters
+    best_n_clusters = num_clusters[np.array(silhouettes).argmax()]
+    return inertias, num_clusters, best_n_clusters
 
-def search_components_gm(x, component_range=range(1, 12)):
+def search_components_gm(x, dims=range(1, 12)):
     bic_results = []
-    for i in component_range:
+    for i in dims:
         result = GaussianMixture(n_components=i, random_state=RANDOM_SEED, n_init=10)
         result.fit(x)
         bic_results.append(result.bic(x))
-    best_n_components = component_range[np.array(bic_results).argmin()]
-    return bic_results, component_range, best_n_components
+    best_n_components = dims[np.array(bic_results).argmin()]
+    return bic_results, dims, best_n_components
 
 def plot_data(x, y, xlabel=None, ylabel=None, title=None, output=None):
     plt.plot(x, y, marker='o')
@@ -89,34 +89,36 @@ def plot_tsne(x, labels, num_labels, perplexity=30., title=None, output=None):
     else:
         plt.show()
 
-def run_kmeans(x, output=None):
-    inertias, clusters_range, best_n_clusters = searchk_kmeans(x)
+def run_kmeans(x, output=None, caption=''):
+    inertias, num_clusters, best_n_clusters = searchk_kmeans(x)
     plot_config = {
-        "x": clusters_range,
+        "x": num_clusters,
         "y": inertias,
         "xlabel": 'Number of clusters',
         "ylabel": 'Sum of Squared Distances',
-        "title": 'K Means: Number of Clusters vs Sum of Squared Distances'
+        "title": f'{caption}-K Means: Number of Clusters vs Sum of Squared Distances'
+        'output': f'{output}/kmeans-{caption}' if output is not None else None
     }
     plot_data(**plot_config)
     result = KMeans(n_clusters=best_n_clusters, init='random', n_init=10, max_iter=100, tol=1e-04, random_state=RANDOM_SEED)
     result.fit(x)
-    plot_tsne(x, result.labels_, best_n_clusters, title=f"TSNE Cluster Visualization K means with {best_n_clusters} clusters", output=output)
+    plot_tsne(x, result.labels_, best_n_clusters, title=f"{caption}-TSNE Cluster Visualization K Means with {best_n_clusters} clusters", output=output)
 
-def run_gm(x, output=None):
-    bic_results, component_range, n_comp = search_components_gm(x)
+def run_gm(x, output=None, caption=''):
+    bic_results, dims, n_comp = search_components_gm(x)
     plot_config = {
-        "x": component_range,
+        "x": dims,
         "y": bic_results,
         "xlabel": 'BIC',
         "ylabel": 'BIC',
-        "title": 'EM: Number of Components vs BIC'
+        "title": f'{caption}-EM: Number of Components vs BIC',
+        'output': f'{output}/em-{caption}' if output is not None else None
     }
     plot_data(**plot_config)
-    result = GaussianMixture(n_components=best_n_components, random_state=RANDOM_SEED, n_init=10)
+    result = GaussianMixture(n_components=dims, random_state=RANDOM_SEED, n_init=10)
     result.fit(x)
     labels = result.predict(x)
-    plot_tsne(x, labels, n_comp, title=f"TSNE Cluster Visualization EM  with {n_comp} components", output=output)
+    plot_tsne(x, labels, n_comp, title=f"{caption}-TSNE Cluster Visualization EM  with {n_comp} components", output=output)
 
 
 def run_pca(x, output=None):
@@ -159,3 +161,32 @@ def run_ica(x, output=None):
     x_ica = ica.fit_transform(x)
     return x_ica, n
 
+def run_rp(x, threshold=0.35, output=None):
+    loss_results = []
+    n_range = range(2, x.shape[1] + 1)
+    for n in n_range:
+        transformer = GaussianRandomProjection(random_state=RANDOM_SEED, n_components=n)
+        x_rp = transformer.fit_transform(x) 
+        x_recon = x_rp @ np.linalg.pinv(transformer.components_.T)
+        loss_results.append(mean_squared_error(x, x_recon))
+
+    plot_config = {
+        "x": n_range,
+        "y": loss_results,
+        "xlabel": 'Number of components',
+        "ylabel": 'Reconstruction Error',
+        "title": 'ICA: Number of Components vs Reconstruction Error',
+        "output": output
+    }
+    plot_data(**plot_config)
+    for i in range(len(loss_results)):
+        if loss_results[i] < threshold:
+            break
+    n = n_range[i]
+    transformer = GaussianRandomProjection(random_state=RANDOM_SEED, n_components=n)
+    x_rp = transformer.fit_transform(x)
+    return loss_results, x_rp, n
+
+def run_experiment_1(x, dataset, output):
+    run_kmeans(x, output=output, caption=f'{dataset}')
+    run_gm(x, output=output, caption=f'{dataset}')
