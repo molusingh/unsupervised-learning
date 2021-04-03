@@ -12,7 +12,7 @@ from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.decomposition import PCA, FastICA
 from sklearn.random_projection import GaussianRandomProjection
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, mean_squared_error
 from sklearn.manifold import TSNE
 
 RANDOM_SEED = 1994540101
@@ -35,7 +35,7 @@ def process_data(x, y, ts=0.2):
 
     return x_train, x_test, y_train, y_test
 
-def searchk_kmeans(x, num_clusters=range(1,12)):
+def searchk_kmeans(x, num_clusters=range(1,11)):
     inertias = []
     silhouettes = []
     for i in num_clusters:
@@ -48,10 +48,12 @@ def searchk_kmeans(x, num_clusters=range(1,12)):
             silhouettes.append(silhouette_score(x, result.labels_))
         else:
             silhouettes.append(float('-inf'))
-    best_n_clusters = num_clusters[np.array(silhouettes).argmax()]
+    silhouettes = np.array(silhouettes)
+    best_n_clusters = num_clusters[silhouettes.argmax()]
+    print(f'Best silhouette score: {silhouettes.max()} for number of clusters: {best_n_clusters}')
     return inertias, num_clusters, best_n_clusters
 
-def search_components_gm(x, dims=range(1, 12)):
+def search_components_gm(x, dims=range(1, 11)):
     bic_results = []
     for i in dims:
         result = GaussianMixture(n_components=i, random_state=RANDOM_SEED, n_init=10)
@@ -68,6 +70,8 @@ def plot_data(x, y, xlabel=None, ylabel=None, title=None, output=None):
         plt.ylabel(ylabel)
     if title is not None:
         plt.title(title)
+    plt.tight_layout()
+
     if output is not None:
         plt.savefig(output)
         plt.close()
@@ -80,9 +84,10 @@ def plot_tsne(x, labels, num_labels, perplexity=30., title=None, output=None):
     x_2d = pd.DataFrame(x_2d,columns=['tsne-1', 'tsne-2'])
     x_2d['label'] = labels
     sns.scatterplot(x="tsne-1", y="tsne-2",hue="label",palette=sns.color_palette("hls", num_labels),data=x_2d,legend="full")
-
     if title is not None:
         plt.title(title)
+    plt.tight_layout()
+
     if output is not None:
         plt.savefig(output)
         plt.close()
@@ -96,13 +101,14 @@ def run_kmeans(x, output=None, caption=''):
         "y": inertias,
         "xlabel": 'Number of clusters',
         "ylabel": 'Sum of Squared Distances',
-        "title": f'{caption}-K Means: Number of Clusters vs Sum of Squared Distances'
-        'output': f'{output}/kmeans-{caption}' if output is not None else None
+        "title": f'{caption}-K Means: Number of Clusters vs Sum of Squared Distances',
+        'output': f'{output}/{caption}-kmeans-inertias' if output is not None else None
     }
     plot_data(**plot_config)
     result = KMeans(n_clusters=best_n_clusters, init='random', n_init=10, max_iter=100, tol=1e-04, random_state=RANDOM_SEED)
     result.fit(x)
-    plot_tsne(x, result.labels_, best_n_clusters, title=f"{caption}-TSNE Cluster Visualization K Means with {best_n_clusters} clusters", output=output)
+    tsne_output = f'{output}/kmeans-tsne-{caption}' if output is not None else None
+    plot_tsne(x, result.labels_, best_n_clusters, title=f"{caption}-TSNE Cluster Visualization K Means with {best_n_clusters} clusters", output=tsne_output)
 
 def run_gm(x, output=None, caption=''):
     bic_results, dims, n_comp = search_components_gm(x)
@@ -112,16 +118,17 @@ def run_gm(x, output=None, caption=''):
         "xlabel": 'BIC',
         "ylabel": 'BIC',
         "title": f'{caption}-EM: Number of Components vs BIC',
-        'output': f'{output}/em-{caption}' if output is not None else None
+        'output': f'{output}/{caption}-em-bic' if output is not None else None
     }
     plot_data(**plot_config)
-    result = GaussianMixture(n_components=dims, random_state=RANDOM_SEED, n_init=10)
+    result = GaussianMixture(n_components=n_comp, random_state=RANDOM_SEED, n_init=10)
     result.fit(x)
     labels = result.predict(x)
-    plot_tsne(x, labels, n_comp, title=f"{caption}-TSNE Cluster Visualization EM  with {n_comp} components", output=output)
+    tsne_output = f'{output}/{caption}-em-tsne' if output is not None else None
+    plot_tsne(x, labels, n_comp, title=f"{caption}-TSNE Cluster Visualization EM  with {n_comp} components", output=tsne_output)
 
 
-def run_pca(x, output=None):
+def run_pca(x, output=None, caption=''):
     pca = PCA(random_state=RANDOM_SEED)
     pca.fit_transform(x)
     x_pca = pca.transform(x)
@@ -131,16 +138,19 @@ def run_pca(x, output=None):
         "xlabel": 'Number of components',
         "ylabel": 'Explained Variance',
         "title": 'PCA: Number of Components vs Explained Variance',
-        "output": output
+        "output": f'{output}/{caption}-pca-num_components' if output is not None else None
     }
     plot_data(**plot_config)
 
     pca = PCA(0.90, random_state=RANDOM_SEED)
     x_pca = pca.fit_transform(x)
     num_components = pca.n_components_
+    x_pca = pd.DataFrame(x_pca)
+    x_pca.to_csv(f'{output}/{caption}-pca.csv')
+    print(f'PCA reduction: from {x.shape[1]} to {num_components}')
     return x_pca, num_components
 
-def run_ica(x, output=None):
+def run_ica(x, output=None, caption=''):
     kurt_results = []
     n_range = range(2, x.shape[1] + 1)
     for i in n_range:
@@ -153,15 +163,18 @@ def run_ica(x, output=None):
         "xlabel": 'Number of components',
         "ylabel": 'Kurtosis',
         "title": 'ICA: Number of Components vs Kurtosis',
-        "output": output
+        "output": f'{output}/{caption}-ica-num_components' if output is not None else None
     }
     plot_data(**plot_config)
     n = n_range[np.array(kurt_results).argmax()]
     ica = FastICA(n_components=n, random_state=RANDOM_SEED)
     x_ica = ica.fit_transform(x)
+    x_ica = pd.DataFrame(x_ica)
+    x_ica.to_csv(f'{output}/{caption}-ica.csv')
+    print(f'ICA reduction: from {x.shape[1]} to {n}')
     return x_ica, n
 
-def run_rp(x, threshold=0.35, output=None):
+def run_rp(x, threshold=0.35, output=None, caption=''):
     loss_results = []
     n_range = range(2, x.shape[1] + 1)
     for n in n_range:
@@ -176,7 +189,7 @@ def run_rp(x, threshold=0.35, output=None):
         "xlabel": 'Number of components',
         "ylabel": 'Reconstruction Error',
         "title": 'ICA: Number of Components vs Reconstruction Error',
-        "output": output
+        "output": f'{output}/{caption}-rp-num_components' if output is not None else None
     }
     plot_data(**plot_config)
     for i in range(len(loss_results)):
@@ -185,8 +198,40 @@ def run_rp(x, threshold=0.35, output=None):
     n = n_range[i]
     transformer = GaussianRandomProjection(random_state=RANDOM_SEED, n_components=n)
     x_rp = transformer.fit_transform(x)
+    x_rp = pd.DataFrame(x_rp)
+    x_rp.to_csv(f'{output}/{caption}-rp.csv')
+    print(f'RP reduction: from {x.shape[1]} to {n}')
     return loss_results, x_rp, n
 
 def run_experiment_1(x, dataset, output):
+    print("\nRunning Experiment1:\nrunning kmeans...")
     run_kmeans(x, output=output, caption=f'{dataset}')
+    print('running gaussian mixture / em...')
     run_gm(x, output=output, caption=f'{dataset}')
+
+def run_experiment_2(x, dataset, output):
+    print("\nRunning Experiment2:\nrunning pca...")
+    run_pca(x, output=output, caption=dataset)
+    print('running ica...')
+    run_ica(x, output=output, caption=dataset)
+    print('running rp...')
+    run_rp(x, output=output, caption=dataset)
+
+def run_experiment_3(dataset, output):
+    x_pca = pd.read_csv(f'{output}/{dataset}-pca.csv')
+    print("\nRunning Experiment3:\nrunning for pca data:\nrunning kmeans...")
+    run_kmeans(x_pca, output=output, caption=f'{dataset}-pca')
+    print('running gaussian mixture / em...')
+    run_gm(x_pca, output=output, caption=f'{dataset}-pca')
+
+    x_ica = pd.read_csv(f'{output}/{dataset}-ica.csv')
+    print("\nrunning for ica data:\nrunning kmeans...")
+    run_kmeans(x_ica, output=output, caption=f'{dataset}-ica')
+    print('running gaussian mixture / em...')
+    run_gm(x_ica, output=output, caption=f'{dataset}-ica')
+
+    x_rp = pd.read_csv(f'{output}/{dataset}-rp.csv')
+    print("\nrunning for rp data:\nrunning kmeans...")
+    run_kmeans(x_rp, output=output, caption=f'{dataset}-rp')
+    print('running gaussian mixture / em...')
+    run_gm(x_rp, output=output, caption=f'{dataset}-rp')
