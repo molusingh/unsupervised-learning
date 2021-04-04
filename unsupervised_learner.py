@@ -66,6 +66,7 @@ def search_components_gm(x, dims=range(1, 11)):
         result.fit(x)
         bic_results.append(result.bic(x))
     best_n_components = dims[np.array(bic_results).argmin()]
+    print(f"best number of clusters: {best_n_components}")
     return bic_results, dims, best_n_components
 
 def plot_data(x, y, xlabel=None, ylabel=None, title=None, output=None):
