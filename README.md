@@ -16,8 +16,10 @@ conda env update --file environment.yml --prune
 ### Open up jupyter lab to access notebook if desired
 jupyter lab
 
-# generate final results, outputs charts in ./output directory
-python main.py 
+# generate final results, outputs charts in ./output directory for first dataset
+python main.py --exp1 --exp2 --exp3 --exp4 --exp5
+# generate final results, outputs charts in ./output directory for second dataset
+python main.py --exp1 --exp2 --exp3 --eye
 
 References:
 
